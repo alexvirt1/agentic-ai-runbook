@@ -40,7 +40,17 @@ log "== assistant-ui-backend: poetry install =="
 # backend/.venv automatically. Pin the interpreter to 3.12 explicitly -
 # otherwise Poetry picks up whatever 'python3' happens to default to on
 # this host, which install-prereqs.sh does not change system-wide.
-(cd "$BACKEND_DIR" && poetry env use python3.12 && poetry install)
+#
+# --no-root: backend/pyproject.toml declares readme = "README.md", but
+# that file only exists at the repo root, not inside backend/, so
+# installing "backend" itself as a package fails with "Readme path ...
+# does not exist" (upstream packaging bug, not this host). We don't need
+# it installed anyway - the systemd unit runs `python -m app.server` from
+# WorkingDirectory=backend/, and app/ has its own __init__.py, so Python
+# resolves it from the working directory without a package install. This
+# flag just skips packaging the project; dependencies still install
+# normally.
+(cd "$BACKEND_DIR" && poetry env use python3.12 && poetry install --no-root)
 
 log "== assistant-ui-backend: ensure .env (non-secret config) =="
 ensure_env_file "$BACKEND_DIR/.env" "$(cat <<'EOF'
