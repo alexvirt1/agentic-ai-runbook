@@ -11,6 +11,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 source "$SCRIPT_DIR/lib.sh"
 
+require_non_root
+
 PYTHON_VERSION="${PYTHON_VERSION:-3.12}"
 NODE_MAJOR="${NODE_MAJOR:-20}"
 PY_BIN="python${PYTHON_VERSION}"
@@ -45,10 +47,8 @@ else
   curl -sSL https://install.python-poetry.org | "$PY_BIN" -
 fi
 
+ensure_local_bin_on_path
 POETRY_BIN_DIR="$HOME/.local/bin"
-if [[ ":$PATH:" != *":$POETRY_BIN_DIR:"* ]]; then
-  export PATH="$POETRY_BIN_DIR:$PATH"
-fi
 if [ ! -f /etc/profile.d/poetry-path.sh ]; then
   log "Adding $POETRY_BIN_DIR to PATH for future login shells (/etc/profile.d/poetry-path.sh)"
   printf 'export PATH="%s:$PATH"\n' "$POETRY_BIN_DIR" | sudo tee /etc/profile.d/poetry-path.sh >/dev/null

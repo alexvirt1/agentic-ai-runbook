@@ -16,6 +16,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 source "$SCRIPT_DIR/lib.sh"
 
+require_non_root
+
 # Corepack downloads the pnpm version pinned in package.json on first use;
 # without this it prompts interactively, which hangs a non-interactive run.
 export COREPACK_ENABLE_DOWNLOAD_PROMPT=0

@@ -10,6 +10,35 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "required command '$1' not found on PATH"
 }
 
+# require_non_root
+# These scripts call sudo themselves for the specific steps that need it
+# (apt installs, systemctl, writes under /etc/systemd). Running the whole
+# script as root (e.g. `sudo scripts/deploy-all.sh`) instead makes
+# $HOME=/root, so anything installed for the invoking user - Poetry, the
+# cloned assistant-ui repo, the pnpm store - ends up root-owned. The
+# systemd services then run as SERVICE_USER (ubuntu by default) and can't
+# reliably read/execute root-owned files.
+require_non_root() {
+  if [ "$(id -u)" -eq 0 ]; then
+    die "run this as your regular user, not root/sudo - it calls sudo itself for the specific steps that need it. Running the whole script as root leaves \$HOME=/root, so files it creates (Poetry, the cloned repo, pnpm) end up owned by root instead of '${SERVICE_USER:-ubuntu}', which is what the systemd services run as."
+  fi
+}
+
+# ensure_local_bin_on_path
+# Poetry's installer puts the 'poetry' binary in ~/.local/bin, which isn't
+# guaranteed to be on PATH here: each script in this repo runs as its own
+# process, so a PATH export made by one script (e.g. install-prereqs.sh)
+# does not carry over to the next one deploy-all.sh invokes, and the
+# /etc/profile.d entry install-prereqs.sh writes only helps *future login
+# shells*, not the current automated run. Call this before require_cmd
+# poetry in any script that needs it.
+ensure_local_bin_on_path() {
+  local dir="$HOME/.local/bin"
+  if [ -d "$dir" ] && [[ ":$PATH:" != *":$dir:"* ]]; then
+    export PATH="$dir:$PATH"
+  fi
+}
+
 # clone_or_update <git-url> <target-dir> [branch]
 # Clones on first run. On later runs, fast-forwards only; if the working
 # tree has local edits it stops rather than clobbering them.

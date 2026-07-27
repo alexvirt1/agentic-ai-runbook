@@ -16,11 +16,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 source "$SCRIPT_DIR/lib.sh"
 
+require_non_root
+
 REPO_URL="${ASSISTANT_UI_REPO_URL:-https://github.com/alexvirt1/assistant-ui-langgraph-fastapi.git}"
 REPO_DIR="${ASSISTANT_UI_DIR:-/opt/ai-agent-lab/assistant-ui-langgraph-fastapi}"
 BACKEND_DIR="$REPO_DIR/backend"
 SERVICE_NAME="assistant-ui-backend"
 SERVICE_USER="${SERVICE_USER:-ubuntu}"
+
+ensure_local_bin_on_path
 
 require_cmd git
 require_cmd poetry

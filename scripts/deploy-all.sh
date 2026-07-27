@@ -23,6 +23,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 source "$SCRIPT_DIR/lib.sh"
 
+require_non_root
+
 log "== preflight: prerequisites =="
 if [ "${SKIP_PREREQS_INSTALL:-0}" = "1" ]; then
   log "SKIP_PREREQS_INSTALL=1, skipping prereqs install/verify"

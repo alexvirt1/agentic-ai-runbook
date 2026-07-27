@@ -288,6 +288,25 @@ journalctl -u <service-name> -f
 
 ## Troubleshooting
 
+- **`ERROR: run this as your regular user, not root/sudo`** — you invoked a
+  script with a leading `sudo` (e.g. `sudo scripts/deploy-all.sh`). Don't —
+  every script here calls `sudo` itself for the specific steps that need it
+  (apt installs, systemctl, `/etc/systemd` writes) and will prompt you.
+  Running the whole thing as root makes `$HOME=/root`, so Poetry, the
+  cloned repo, and the pnpm store end up owned by root instead of by
+  `SERVICE_USER` (`ubuntu` by default) — which the systemd services run as
+  and won't be able to read/execute. Re-run without `sudo`. If you already
+  hit this once, clean up what it left behind first:
+  `sudo rm -f /etc/profile.d/poetry-path.sh` (it was pointing at
+  `/root/.local/bin`, which your regular user can't read anyway).
+- **`required command 'poetry' not found on PATH`** even right after
+  `install-prereqs.sh` reported it installed — each script here runs as its
+  own process, so a `PATH` export made by one script never carries over to
+  the next; only `/etc/profile.d` (future *login* shells) persists it. This
+  is handled automatically now (`ensure_local_bin_on_path` in `lib.sh` runs
+  before `require_cmd poetry` in every script that needs it), but if you
+  still hit it, check `~/.local/bin/poetry` exists and `echo $HOME` matches
+  the user you expect (see the root/sudo item above).
 - **`status=203/EXEC`** in `systemctl status` — the `ExecStart` binary path
   doesn't exist under systemd's environment. Check with
   `command -v <binary>` and compare to the path baked into the unit file.
