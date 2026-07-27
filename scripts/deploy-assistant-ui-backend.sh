@@ -3,9 +3,12 @@
 # as assistant-ui-backend.service.
 #
 # Mirrors the exact working setup: Poetry in-project venv (backend/.venv,
-# per poetry.toml), uvicorn app served via `python -m app.server` on :8000,
-# DATABASE_URL injected through a systemd drop-in so the secret never has
-# to live in the repo or in this script.
+# per poetry.toml) pinned to Python 3.12, uvicorn app served via
+# `python -m app.server` on :8000, DATABASE_URL injected through a systemd
+# drop-in so the secret never has to live in the repo or in this script.
+#
+# Requires git, poetry, and python3.12 on PATH - run scripts/install-prereqs.sh
+# first on a host that doesn't have them yet.
 #
 # Idempotent: safe to re-run to pick up new commits and restart the service.
 set -euo pipefail
@@ -21,6 +24,7 @@ SERVICE_USER="${SERVICE_USER:-ubuntu}"
 
 require_cmd git
 require_cmd poetry
+require_cmd python3.12
 
 log "== assistant-ui-backend: pull repo =="
 clone_or_update "$REPO_URL" "$REPO_DIR"
@@ -29,8 +33,10 @@ check_postgres_running || warn "continuing anyway, but the backend will fail to 
 
 log "== assistant-ui-backend: poetry install =="
 # backend/poetry.toml sets virtualenvs.in-project=true, so this creates
-# backend/.venv automatically.
-(cd "$BACKEND_DIR" && poetry install)
+# backend/.venv automatically. Pin the interpreter to 3.12 explicitly -
+# otherwise Poetry picks up whatever 'python3' happens to default to on
+# this host, which install-prereqs.sh does not change system-wide.
+(cd "$BACKEND_DIR" && poetry env use python3.12 && poetry install)
 
 log "== assistant-ui-backend: ensure .env (non-secret config) =="
 ensure_env_file "$BACKEND_DIR/.env" "$(cat <<'EOF'

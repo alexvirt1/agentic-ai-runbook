@@ -44,15 +44,25 @@ host, since the frontend proxies to the backend at `127.0.0.1:8000`.
 
 ## Prerequisites
 
-Install/verify these before running anything in `scripts/`:
+All you need by hand is a clean Ubuntu VM with `sudo` access — no `git`,
+`curl`, Python, Poetry, or Node required beforehand. `scripts/install-prereqs.sh`
+installs all of it:
 
-- Ubuntu with `git`, `curl`, `sudo` access
-- Python 3.11+ (`python3 --version`)
-- [Poetry](https://python-poetry.org/) (`poetry --version`) — used for the assistant-ui backend
-- Node.js 20+ with Corepack enabled (`node --version`, `corepack --version`) — used for the frontend (pnpm via corepack)
+- Base tooling: `git`, `curl`, `build-essential`, `libpq-dev`, etc.
+- Python 3.12 (`python3.12`), via the deadsnakes PPA if the host's own repos
+  don't carry it yet
+- [Poetry](https://python-poetry.org/), installed against `python3.12` — used
+  for the assistant-ui backend
+- Node.js 20 with Corepack enabled — used for the frontend (pnpm via corepack)
 
-Neither PostgreSQL nor Ollama need to be installed by hand — `scripts/install-postgres.sh`
-and `scripts/install-ollama.sh` handle those. Check readiness at any time with:
+It's idempotent (skips anything already installed) and safe to re-run.
+`deploy-all.sh` runs it automatically as the first step; set
+`SKIP_PREREQS_INSTALL=1` to skip it (e.g. you've already run it once and
+just want to save the apt/PATH checks).
+
+Neither PostgreSQL nor Ollama need to be installed by hand either —
+`scripts/install-postgres.sh` and `scripts/install-ollama.sh` handle those.
+Check readiness at any time with:
 
 ```bash
 scripts/check-postgres.sh
@@ -77,26 +87,56 @@ If you're running Ollama on this same host, either re-run with
 `OLLAMA_BASE_URL=http://127.0.0.1:11434 scripts/deploy-all.sh`, or leave the
 default `0.0.0.0` binding — it also works for local callers.
 
-**2. On the app host, deploy the rest** (idempotent — safe to re-run):
+**2. On the app host, deploy the rest** (idempotent — safe to re-run, and
+works on a completely clean VM with nothing preinstalled but `sudo`):
 
 ```bash
 cd /opt/ai-agent-lab/agentic-ai-runbook
 scripts/deploy-all.sh
 ```
 
-This installs/verifies Postgres, checks Ollama is reachable, then runs the
-two deploy scripts below in sequence, then curls both health endpoints.
+This installs OS-level prerequisites (Python 3.12 + Poetry, Node 20 +
+Corepack, build tools), installs/verifies Postgres, checks Ollama is
+reachable, then runs the two deploy scripts below in sequence, then curls
+both health endpoints.
 
 ## Individual scripts
 
 Run these on their own if you only need to install/update one piece.
 
 ```bash
+scripts/install-prereqs.sh                # git/build tools, Python 3.12 + Poetry, Node 20 + Corepack
 scripts/install-ollama.sh                 # Ollama                        (:11434)
 scripts/install-postgres.sh               # PostgreSQL + role/db provisioning
 scripts/deploy-assistant-ui-backend.sh    # assistant-ui-backend.service   (:8000)
 scripts/deploy-assistant-ui-frontend.sh   # assistant-ui-frontend.service  (:3000)
 ```
+
+### `install-prereqs.sh`
+
+Idempotent OS-tooling bootstrap, meant to be run first on a host that has
+none of this yet:
+
+1. Installs base apt packages: `git`, `curl`, `build-essential`, `libpq-dev`,
+   etc.
+2. Installs Python 3.12 (`python3.12`, `-venv`, `-dev`) — adds the
+   `deadsnakes` PPA first if the host's own repos don't carry it (e.g.
+   Ubuntu 22.04).
+3. Installs [Poetry](https://python-poetry.org/) via its official installer,
+   run against `python3.12` specifically, and adds its install dir
+   (`~/.local/bin`) to `PATH` for this run and future login shells (via
+   `/etc/profile.d/poetry-path.sh`).
+4. Installs Node.js 20 via the NodeSource setup script (skipped if a
+   Node 20+ is already present), then runs `corepack enable` so `pnpm` is
+   available through Corepack.
+
+`deploy-all.sh` runs this automatically; set `SKIP_PREREQS_INSTALL=1` to
+skip it. Override versions with `PYTHON_VERSION` (default `3.12`) or
+`NODE_MAJOR` (default `20`).
+
+`deploy-assistant-ui-backend.sh` pins the backend's Poetry venv to this
+Python version explicitly (`poetry env use python3.12`), so it stays 3.12
+even if the host's default `python3` is something else.
 
 ### `install-ollama.sh`
 

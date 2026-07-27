@@ -3,7 +3,12 @@
 #   1. assistant-ui-backend.service
 #   2. assistant-ui-frontend.service
 #
-# PostgreSQL is provisioned first via install-postgres.sh (idempotent: it
+# OS-level tooling (git, build tools, Python 3.12 + Poetry, Node 20 +
+# Corepack) is provisioned first via install-prereqs.sh - safe to re-run,
+# and safe on a clean VM that has none of it yet. Set
+# SKIP_PREREQS_INSTALL=1 to skip this (e.g. it's already been run once).
+#
+# PostgreSQL is provisioned next via install-postgres.sh (idempotent: it
 # installs the package, starts the service, and creates the role/database
 # pair the backend expects only if it doesn't already exist). Set
 # SKIP_POSTGRES_INSTALL=1 to skip this and just verify it's already running
@@ -17,6 +22,13 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 source "$SCRIPT_DIR/lib.sh"
+
+log "== preflight: prerequisites =="
+if [ "${SKIP_PREREQS_INSTALL:-0}" = "1" ]; then
+  log "SKIP_PREREQS_INSTALL=1, skipping prereqs install/verify"
+else
+  "$SCRIPT_DIR/install-prereqs.sh"
+fi
 
 log "== preflight: PostgreSQL =="
 if [ "${SKIP_POSTGRES_INSTALL:-0}" = "1" ]; then

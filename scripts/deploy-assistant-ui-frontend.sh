@@ -7,11 +7,18 @@
 # the backend at http://127.0.0.1:8000/api/chat - so this service must
 # run on the same host as assistant-ui-backend.
 #
+# Requires git and corepack (ships with Node.js 20+) on PATH - run
+# scripts/install-prereqs.sh first on a host that doesn't have them yet.
+#
 # Idempotent: safe to re-run to pick up new commits, rebuild, and restart.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 source "$SCRIPT_DIR/lib.sh"
+
+# Corepack downloads the pnpm version pinned in package.json on first use;
+# without this it prompts interactively, which hangs a non-interactive run.
+export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 REPO_URL="${ASSISTANT_UI_REPO_URL:-https://github.com/alexvirt1/assistant-ui-langgraph-fastapi.git}"
 REPO_DIR="${ASSISTANT_UI_DIR:-/opt/ai-agent-lab/assistant-ui-langgraph-fastapi}"
