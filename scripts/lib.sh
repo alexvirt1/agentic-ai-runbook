@@ -108,3 +108,50 @@ prompt_secret() {
   fi
   eval "$__var=\"\$__current\""
 }
+
+# Where install-postgres.sh records the backend's connection string so that
+# deploy-assistant-ui-backend.sh can reuse it instead of asking for the same
+# password a second time. Each script in this repo runs as its own process
+# (see deploy-all.sh), so an exported variable would not reach the next one -
+# the handoff has to go through a file. Root-owned and 0600: it holds a
+# password.
+ASSISTANT_UI_DB_ENV_FILE="${ASSISTANT_UI_DB_ENV_FILE:-/etc/ai-agent-lab/assistant-ui-db.env}"
+
+# urlencode <string>
+# Percent-encodes everything outside the URL unreserved set, so a password
+# containing @ : / ? # % survives being embedded in a postgresql:// URL.
+urlencode() {
+  local LC_ALL=C
+  local s="$1" i c hex out=''
+  for (( i = 0; i < ${#s}; i++ )); do
+    c="${s:i:1}"
+    case "$c" in
+      [a-zA-Z0-9.~_-]) out+="$c" ;;
+      *) printf -v hex '%%%02X' "'$c"; out+="$hex" ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+
+# save_database_url <url>
+# Records the backend's DATABASE_URL for the next script/run to pick up.
+save_database_url() {
+  local url="$1"
+  sudo install -d -m 0755 -o root -g root "$(dirname "$ASSISTANT_UI_DB_ENV_FILE")"
+  # Create with the final mode *before* writing, so the secret is never
+  # briefly world-readable.
+  sudo install -m 0600 -o root -g root /dev/null "$ASSISTANT_UI_DB_ENV_FILE"
+  printf 'DATABASE_URL=%s\n' "$url" | sudo tee "$ASSISTANT_UI_DB_ENV_FILE" >/dev/null
+  log "Recorded DATABASE_URL in $ASSISTANT_UI_DB_ENV_FILE (root-only, 0600)"
+}
+
+# load_saved_database_url
+# Echoes the URL recorded by save_database_url; returns non-zero if there
+# isn't one yet.
+load_saved_database_url() {
+  local url
+  sudo test -f "$ASSISTANT_UI_DB_ENV_FILE" || return 1
+  url="$(sudo sed -n '1s/^DATABASE_URL=//p' "$ASSISTANT_UI_DB_ENV_FILE")"
+  [ -n "$url" ] || return 1
+  printf '%s' "$url"
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pulls alexvirt1/assistant-ui-langgraph-fastapi (if not already present)
+# Pulls alexvirt1/ai-assistant-ui-fastapi (if not already present)
 # and (re)installs frontend/ as assistant-ui-frontend.service.
 #
 # Mirrors the exact working setup: pnpm build then `next start` on :3000,

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pulls alexvirt1/assistant-ui-langgraph-fastapi and (re)installs backend/
+# Pulls alexvirt1/ai-assistant-ui-fastapi and (re)installs backend/
 # as assistant-ui-backend.service.
 #
 # Mirrors the exact working setup: Poetry in-project venv (backend/.venv,
@@ -85,13 +85,22 @@ DROPIN_FILE="$DROPIN_DIR/override.conf"
 if sudo test -f "$DROPIN_FILE"; then
   log "$DROPIN_FILE already exists, leaving it untouched"
 else
-  prompt_secret ASSISTANT_UI_DATABASE_URL \
-    "Enter DATABASE_URL for assistant-ui-backend (postgresql://user:pass@127.0.0.1:5432/assistant_ui)"
+  # install-postgres.sh already knew the password when it created the role, so
+  # reuse what it recorded rather than prompting for the same secret twice.
+  if [ -z "${ASSISTANT_UI_DATABASE_URL:-}" ] && ASSISTANT_UI_DATABASE_URL="$(load_saved_database_url)"; then
+    log "Reusing the DATABASE_URL recorded by install-postgres.sh ($ASSISTANT_UI_DB_ENV_FILE)"
+  else
+    prompt_secret ASSISTANT_UI_DATABASE_URL \
+      "Enter DATABASE_URL for assistant-ui-backend (postgresql://user:pass@127.0.0.1:5432/assistant_ui)"
+  fi
   if [ -z "${ASSISTANT_UI_DATABASE_URL:-}" ]; then
     warn "No DATABASE_URL provided - skipping drop-in. Backend will run WITHOUT Postgres persistence until you create:"
     warn "  $DROPIN_FILE  with: [Service]\\nEnvironment=DATABASE_URL=postgresql://..."
   else
-    sudo mkdir -p "$DROPIN_DIR"
+    sudo install -d -m 0755 -o root -g root "$DROPIN_DIR"
+    # 0600 before writing: the drop-in embeds the DB password, and systemd
+    # reads unit files as root so it does not need to be world-readable.
+    sudo install -m 0600 -o root -g root /dev/null "$DROPIN_FILE"
     sudo tee "$DROPIN_FILE" >/dev/null <<EOF
 [Service]
 Environment=DATABASE_URL=${ASSISTANT_UI_DATABASE_URL}

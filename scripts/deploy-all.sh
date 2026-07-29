@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs both deploy scripts in order (alexvirt1/assistant-ui-langgraph-fastapi):
+# Runs both deploy scripts in order (alexvirt1/ai-assistant-ui-fastapi):
 #   1. assistant-ui-backend.service
 #   2. assistant-ui-frontend.service
 #

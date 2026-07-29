@@ -11,7 +11,7 @@ re-deriving everything from the chat history in `chat-scripts.md`.
 flowchart TD
     Browser(["Browser"])
 
-    subgraph UI["assistant-ui stack — alexvirt1/assistant-ui-langgraph-fastapi"]
+    subgraph UI["assistant-ui stack — alexvirt1/ai-assistant-ui-fastapi"]
         Frontend["assistant-ui-frontend :3000<br/>Next.js (frontend/)"]
         Backend["assistant-ui-backend :8000<br/>FastAPI + LangGraph (backend/)"]
         Frontend -- "POST /api/chat<br/>(route.ts proxy)" --> Backend
@@ -28,18 +28,11 @@ flowchart TD
 `assistant-ui-backend` and `assistant-ui-frontend` must run on the same
 host, since the frontend proxies to the backend at `127.0.0.1:8000`.
 
-> There used to be a second, independent chat backend here
-> (`langgraph-fastapi.service`, from `alexvirt1/langgraph-ollama-agent`). It
-> was a parallel reimplementation of the same agent with no dependency
-> between it and `assistant-ui-backend`, and has been retired from this
-> runbook as outdated — this repo now only installs/manages the
-> assistant-ui stack.
-
 ## Repos and services
 
 | Repo | Deploys to | systemd service | Port |
 | --- | --- | --- | --- |
-| [alexvirt1/assistant-ui-langgraph-fastapi](https://github.com/alexvirt1/ai-assistant-ui-fastapi/) `backend/` | `/opt/ai-agent-lab/
+| [alexvirt1/ai-assistant-ui-fastapi](https://github.com/alexvirt1/ai-assistant-ui-fastapi/) `backend/` | `/opt/ai-agent-lab/
 ai-assistant-ui-fastapi/backend` | `assistant-ui-backend.service` | 8000 |
 | same repo, `frontend/` | `/opt/ai-agent-lab/
 ai-assistant-ui-fastapi/frontend` | `assistant-ui-frontend.service` | 3000 |
@@ -186,9 +179,11 @@ Idempotent PostgreSQL bootstrap:
    `assistant-ui-backend.service` expects, **only if it doesn't already
    exist** (an existing role keeps its existing password — this script
    never resets one).
-4. Prints the resulting `DATABASE_URL` value for you to paste into the
-   prompt shown by `deploy-assistant-ui-backend.sh` — it does not write it
-   to any file itself.
+4. Records the resulting `DATABASE_URL` in
+   `/etc/ai-agent-lab/assistant-ui-db.env` (root-owned, `0600`) so
+   `deploy-assistant-ui-backend.sh` can reuse it — you only ever type the
+   database password once. Override the location with
+   `ASSISTANT_UI_DB_ENV_FILE`.
 
 Role/database name are overridable via `ASSISTANT_UI_DB_ROLE`,
 `ASSISTANT_UI_DB_NAME`. The password is read from `ASSISTANT_UI_DB_PASSWORD`
@@ -222,14 +217,22 @@ Postgres connection string (see **Secrets** below).
 Nothing in this repo or in `scripts/` contains real credentials.
 
 - `install-postgres.sh` role password — read from `ASSISTANT_UI_DB_PASSWORD`
-  if pre-exported, otherwise prompted for interactively (non-echoing).
-  Never written to disk by the script itself.
+  if pre-exported, otherwise prompted for interactively (non-echoing). The
+  password itself is never written to disk on its own; the connection string
+  built from it is (see next point).
 - `assistant-ui-backend` — `DATABASE_URL` is **not** put in the repo or the
-  main unit file. It's stored in a systemd drop-in
-  (`/etc/systemd/system/assistant-ui-backend.service.d/override.conf`),
-  created once via an interactive, non-echoing prompt (or by pre-exporting
-  `ASSISTANT_UI_DATABASE_URL` before running the script). Re-running the
-  script leaves an existing drop-in untouched.
+  main unit file. It lives in two root-owned `0600` files:
+  `/etc/ai-agent-lab/assistant-ui-db.env`, written by `install-postgres.sh`
+  when it creates the role, and the systemd drop-in
+  `/etc/systemd/system/assistant-ui-backend.service.d/override.conf`, which
+  `deploy-assistant-ui-backend.sh` derives from it. So the password is typed
+  once, at role creation. The deploy script resolves the URL in this order:
+  `ASSISTANT_UI_DATABASE_URL` if pre-exported → the recorded file → an
+  interactive, non-echoing prompt (the fallback when the role predates this
+  script). Re-running either script leaves an existing drop-in untouched.
+
+  Passwords containing `@ : / ? # %` are percent-encoded automatically when
+  the URL is built, so no manual escaping is needed at the prompt.
 - Non-secret config (`OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_NUM_CTX`) is
   filled in with real homelab values since these aren't credentials.
 
@@ -250,7 +253,7 @@ defaults, so you can point them at a different host/layout without editing
 the scripts:
 
 ```bash
-ASSISTANT_UI_DIR=/srv/assistant-ui-langgraph-fastapi \
+ASSISTANT_UI_DIR=/srv/ai-assistant-ui-fastapi \
 SERVICE_USER=deploy \
 scripts/deploy-all.sh
 ```
@@ -315,6 +318,17 @@ journalctl -u <service-name> -f
 - **Backend starts but `/api/chat` 404s / no persistence** — `DATABASE_URL`
   drop-in is missing or wrong; check
   `systemctl cat assistant-ui-backend` and `journalctl -u assistant-ui-backend`.
+- **`password authentication failed for user "assistant_ui"`** — the drop-in's
+  password doesn't match the role's. `install-postgres.sh` never resets an
+  existing role's password, so this happens when the role was created outside
+  these scripts, or the drop-in was filled in by hand. Fix by resetting both:
+  ```bash
+  sudo -u postgres psql -c "ALTER ROLE assistant_ui PASSWORD 'newpass';"
+  sudo rm /etc/ai-agent-lab/assistant-ui-db.env \
+          /etc/systemd/system/assistant-ui-backend.service.d/override.conf
+  ```
+  then re-run `scripts/deploy-assistant-ui-backend.sh` and enter
+  `postgresql://assistant_ui:newpass@127.0.0.1:5432/assistant_ui` at the prompt.
 - **Frontend loads but chat fails** — confirm
   `frontend/app/api/chat/route.ts` still points at
   `http://127.0.0.1:8000/api/chat`, and that `assistant-ui-backend` is

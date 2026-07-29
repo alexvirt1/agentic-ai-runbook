@@ -40,6 +40,9 @@ ensure_role_and_db() {
     [ -n "$password" ] || die "No password provided for role '$role'"
     sudo -u postgres psql -c "CREATE ROLE ${role} LOGIN PASSWORD '${password}';" >/dev/null
     log "Created role '$role'"
+    # Hand the connection string to deploy-assistant-ui-backend.sh instead of
+    # making you retype the same password into its DATABASE_URL prompt.
+    save_database_url "postgresql://${role}:$(urlencode "$password")@127.0.0.1:5432/${db}"
   fi
 
   if pg_database_exists "$db"; then
@@ -79,8 +82,10 @@ cat <<EOF
 
 == install-postgres: done ==
 
-Use this when deploy-assistant-ui-backend.sh prompts for a DATABASE_URL for
-its systemd drop-in (it is not written to disk by this script):
+deploy-assistant-ui-backend.sh picks the DATABASE_URL up from
+${ASSISTANT_UI_DB_ENV_FILE} automatically, so it will not
+ask you for it. If that file is missing (e.g. the role predates this
+script), it falls back to prompting - the value it wants is:
 
   postgresql://${ASSISTANT_UI_DB_ROLE}:<password>@127.0.0.1:5432/${ASSISTANT_UI_DB_NAME}
 
