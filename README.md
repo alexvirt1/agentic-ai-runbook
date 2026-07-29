@@ -39,8 +39,10 @@ host, since the frontend proxies to the backend at `127.0.0.1:8000`.
 
 | Repo | Deploys to | systemd service | Port |
 | --- | --- | --- | --- |
-| [alexvirt1/assistant-ui-langgraph-fastapi](https://github.com/alexvirt1/assistant-ui-langgraph-fastapi/) `backend/` | `/opt/ai-agent-lab/assistant-ui-langgraph-fastapi/backend` | `assistant-ui-backend.service` | 8000 |
-| same repo, `frontend/` | `/opt/ai-agent-lab/assistant-ui-langgraph-fastapi/frontend` | `assistant-ui-frontend.service` | 3000 |
+| [alexvirt1/assistant-ui-langgraph-fastapi](https://github.com/alexvirt1/ai-assistant-ui-fastapi/) `backend/` | `/opt/ai-agent-lab/
+ai-assistant-ui-fastapi/backend` | `assistant-ui-backend.service` | 8000 |
+| same repo, `frontend/` | `/opt/ai-agent-lab/
+ai-assistant-ui-fastapi/frontend` | `assistant-ui-frontend.service` | 3000 |
 
 ## Prerequisites
 

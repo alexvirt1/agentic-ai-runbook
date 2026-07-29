@@ -22,8 +22,8 @@ require_non_root
 # without this it prompts interactively, which hangs a non-interactive run.
 export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
-REPO_URL="${ASSISTANT_UI_REPO_URL:-https://github.com/alexvirt1/assistant-ui-langgraph-fastapi.git}"
-REPO_DIR="${ASSISTANT_UI_DIR:-/opt/ai-agent-lab/assistant-ui-langgraph-fastapi}"
+REPO_URL="${ASSISTANT_UI_REPO_URL:-https://github.com/alexvirt1/ai-assistant-ui-fastapi.git}"
+REPO_DIR="${ASSISTANT_UI_DIR:-/opt/ai-agent-lab/ai-assistant-ui-fastapi}"
 FRONTEND_DIR="$REPO_DIR/frontend"
 SERVICE_NAME="assistant-ui-frontend"
 SERVICE_USER="${SERVICE_USER:-ubuntu}"
