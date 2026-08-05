@@ -179,7 +179,11 @@ Idempotent PostgreSQL bootstrap:
    `assistant-ui-backend.service` expects, **only if it doesn't already
    exist** (an existing role keeps its existing password — this script
    never resets one).
-4. Records the resulting `DATABASE_URL` in
+4. Installs and creates the two extensions the backend can take advantage
+   of, in that database (see **Database extensions** below). Both are
+   best-effort: a failure warns and continues, because the backend degrades
+   rather than breaking without them.
+5. Records the resulting `DATABASE_URL` in
    `/etc/ai-agent-lab/assistant-ui-db.env` (root-owned, `0600`) so
    `deploy-assistant-ui-backend.sh` can reuse it — you only ever type the
    database password once. Override the location with
@@ -193,6 +197,45 @@ first time the role is created.
 `deploy-all.sh` runs this automatically; set `SKIP_POSTGRES_INSTALL=1` to
 skip it and just verify an existing Postgres instance is up instead (e.g.
 if Postgres is managed outside this repo).
+
+#### Database extensions
+
+| Extension | Package | What uses it |
+| --- | --- | --- |
+| `vector` (pgvector) | `postgresql-<major>-pgvector` (Ubuntu `universe`) | Embedding similarity for document retrieval |
+| `pg_trgm` | `postgresql-contrib`, already installed | Trigram index behind chat-history search |
+
+Both are created in the `assistant_ui` database, and both are optional —
+the backend works without either, so `install-postgres.sh` warns and
+carries on rather than failing a deploy. Without `vector`, embeddings stay
+in `JSONB` and similarity is computed in Python (fine per-document, slow
+across a whole corpus). Without `pg_trgm`, chat search falls back to an
+unindexed `ILIKE` scan.
+
+Notes worth knowing when this misbehaves:
+
+- The pgvector package is **per major version** — `postgresql-16-pgvector`
+  installs into `/usr/lib/postgresql/16/lib`. The script reads the major
+  from the *running* server (`SHOW server_version_num`), so a host with two
+  clusters gets the one actually serving. Upgrading the server major means
+  installing the matching package again.
+- `vector` is not a [trusted extension](https://www.postgresql.org/docs/16/sql-createextension.html),
+  so `CREATE EXTENSION` needs superuser — hence `sudo -u postgres`, not the
+  `assistant_ui` role. `pg_trgm` *is* trusted (PG13+) and the owning role
+  could create it itself; the script does both in one place regardless.
+- Neither is a `shared_preload_libraries` extension, so no Postgres restart
+  is needed after installing them.
+- Skip the pgvector half entirely with `SKIP_PGVECTOR_INSTALL=1` (e.g. an
+  air-gapped host, or a managed Postgres where you provision extensions
+  yourself). `pg_trgm` is always attempted — it needs no extra package.
+
+To add them to a database that predates this script:
+
+```bash
+sudo apt-get install -y "postgresql-$(sudo -u postgres psql -tAc 'SHOW server_version_num' | awk '{print int($1/10000)}')-pgvector"
+sudo -u postgres psql -d assistant_ui -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+sudo -u postgres psql -d assistant_ui -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm;'
+```
 
 ### The two `deploy-*.sh` scripts
 
@@ -283,6 +326,15 @@ sudo -u postgres psql -d assistant_ui -c \
   "SELECT thread_id, count(*) FROM checkpoints GROUP BY thread_id ORDER BY count(*) DESC;"
 ```
 
+Confirm the extensions are created (`installed_version` non-empty for both;
+`scripts/check-postgres.sh` prints the same thing):
+
+```bash
+sudo -u postgres psql -d assistant_ui -c \
+  "SELECT name, default_version, installed_version FROM pg_available_extensions
+    WHERE name IN ('vector', 'pg_trgm');"
+```
+
 ## Operating the services
 
 ```bash
@@ -329,6 +381,16 @@ journalctl -u <service-name> -f
   ```
   then re-run `scripts/deploy-assistant-ui-backend.sh` and enter
   `postgresql://assistant_ui:newpass@127.0.0.1:5432/assistant_ui` at the prompt.
+- **`could not open extension control file ".../vector.control"`** — the
+  pgvector package is missing for the major version that's actually
+  running. Check which that is with
+  `sudo -u postgres psql -tAc 'SHOW server_version_num'` (e.g. `160014` →
+  major 16) and install `postgresql-16-pgvector`. A host upgraded from one
+  major to the next hits this with the old package still installed.
+- **`permission denied to create extension "vector"`** — you ran
+  `CREATE EXTENSION` as `assistant_ui`. pgvector isn't a trusted extension,
+  so it needs `sudo -u postgres psql -d assistant_ui -c 'CREATE EXTENSION
+  vector;'`. (`pg_trgm` is trusted and works either way.)
 - **Frontend loads but chat fails** — confirm
   `frontend/app/api/chat/route.ts` still points at
   `http://127.0.0.1:8000/api/chat`, and that `assistant-ui-backend` is
