@@ -3,6 +3,12 @@
 #   1. assistant-ui-backend.service
 #   2. assistant-ui-frontend.service
 #
+# Deploys the 'main' branch by default. Pass -b/--branch (or a bare branch
+# name) to deploy something else - e.g. `./deploy-all.sh dev` to test the
+# dev branch before it's merged. Both services always come from the same
+# branch, and both are re-installed/rebuilt from it, so switching back is
+# just another run with the other branch name.
+#
 # OS-level tooling (git, build tools, Python 3.12 + Poetry, Node 20 +
 # Corepack) is provisioned first via install-prereqs.sh - safe to re-run,
 # and safe on a clean VM that has none of it yet. Set
@@ -23,7 +29,63 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 source "$SCRIPT_DIR/lib.sh"
 
+usage() {
+  cat <<'EOF'
+Usage: deploy-all.sh [-b|--branch <branch>] [<branch>]
+
+Options:
+  -b, --branch <branch>   Branch of alexvirt1/ai-assistant-ui-fastapi to
+                          deploy (default: main, or $ASSISTANT_UI_BRANCH).
+  -h, --help              Show this help and exit.
+
+Examples:
+  ./deploy-all.sh                  # deploy main
+  ./deploy-all.sh dev              # deploy the dev branch
+  ./deploy-all.sh --branch feat/x  # deploy any other branch
+
+Environment:
+  ASSISTANT_UI_BRANCH      Same as --branch (the flag wins if both are set).
+  SKIP_PREREQS_INSTALL=1   Skip the OS prerequisites step.
+  SKIP_POSTGRES_INSTALL=1  Skip installing Postgres (just verify it runs).
+  OLLAMA_BASE_URL          Where to reach Ollama (default 192.168.87.160).
+EOF
+}
+
+BRANCH="${ASSISTANT_UI_BRANCH:-main}"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -b|--branch)
+      [ $# -ge 2 ] || die "$1 requires a branch name"
+      BRANCH="$2"
+      shift 2
+      ;;
+    --branch=*)
+      BRANCH="${1#*=}"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    -*)
+      usage >&2
+      die "unknown option '$1'"
+      ;;
+    *)
+      BRANCH="$1"
+      shift
+      ;;
+  esac
+done
+[ -n "$BRANCH" ] || die "branch name must not be empty"
+
+# Each deploy script runs as its own process, so the branch has to be handed
+# over through the environment rather than a shell variable.
+export ASSISTANT_UI_BRANCH="$BRANCH"
+
 require_non_root
+
+log "Deploying branch '$BRANCH' of alexvirt1/ai-assistant-ui-fastapi"
 
 log "== preflight: prerequisites =="
 if [ "${SKIP_PREREQS_INSTALL:-0}" = "1" ]; then

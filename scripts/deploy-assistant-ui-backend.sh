@@ -20,6 +20,9 @@ require_non_root
 
 REPO_URL="${ASSISTANT_UI_REPO_URL:-https://github.com/alexvirt1/ai-assistant-ui-fastapi.git}"
 REPO_DIR="${ASSISTANT_UI_DIR:-/opt/ai-agent-lab/ai-assistant-ui-fastapi}"
+# Which branch to deploy. deploy-all.sh exports this from its --branch flag;
+# set it directly to run this script standalone against e.g. dev.
+BRANCH="${ASSISTANT_UI_BRANCH:-main}"
 BACKEND_DIR="$REPO_DIR/backend"
 SERVICE_NAME="assistant-ui-backend"
 SERVICE_USER="${SERVICE_USER:-ubuntu}"
@@ -30,8 +33,8 @@ require_cmd git
 require_cmd poetry
 require_cmd python3.12
 
-log "== assistant-ui-backend: pull repo =="
-clone_or_update "$REPO_URL" "$REPO_DIR"
+log "== assistant-ui-backend: pull repo (branch: $BRANCH) =="
+clone_or_update "$REPO_URL" "$REPO_DIR" "$BRANCH"
 
 check_postgres_running || warn "continuing anyway, but the backend will fail to start without Postgres reachable"
 

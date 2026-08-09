@@ -41,18 +41,29 @@ ensure_local_bin_on_path() {
 
 # clone_or_update <git-url> <target-dir> [branch]
 # Clones on first run. On later runs, fast-forwards only; if the working
-# tree has local edits it stops rather than clobbering them.
+# tree has local edits it stops rather than clobbering them. Switching
+# branches between runs (e.g. main -> dev) is supported: the checkout is
+# created from the remote-tracking ref the first time it's requested.
 clone_or_update() {
   local url="$1" dir="$2" branch="${3:-main}"
 
   if [ -d "$dir/.git" ]; then
     log "Repo already present at $dir, fetching latest '$branch'"
-    git -C "$dir" fetch origin "$branch"
+    # Explicit refspec: guarantees refs/remotes/origin/<branch> exists even
+    # when the branch is new to this clone (a bare `git fetch origin <branch>`
+    # only writes FETCH_HEAD in a single-branch clone).
+    git -C "$dir" fetch origin "+refs/heads/$branch:refs/remotes/origin/$branch" \
+      || die "branch '$branch' not found on $url"
     if [ -n "$(git -C "$dir" status --porcelain)" ]; then
       warn "$dir has local/uncommitted changes; leaving it as-is. Resolve manually, then re-run."
       return 0
     fi
-    git -C "$dir" checkout "$branch"
+    if git -C "$dir" show-ref --verify --quiet "refs/heads/$branch"; then
+      git -C "$dir" checkout "$branch"
+    else
+      log "Creating local branch '$branch' tracking origin/$branch"
+      git -C "$dir" checkout -b "$branch" --track "origin/$branch"
+    fi
     git -C "$dir" merge --ff-only "origin/$branch"
   else
     log "Cloning $url -> $dir"

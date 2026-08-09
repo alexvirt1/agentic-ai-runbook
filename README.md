@@ -95,6 +95,30 @@ Corepack, build tools), installs/verifies Postgres, checks Ollama is
 reachable, then runs the two deploy scripts below in sequence, then curls
 both health endpoints.
 
+### Deploying a branch other than `main`
+
+`deploy-all.sh` deploys `main` by default. To try a branch before it's
+merged, pass its name (as a positional argument or via `-b`/`--branch`):
+
+```bash
+scripts/deploy-all.sh dev                # deploy the dev branch
+scripts/deploy-all.sh --branch feat/xyz  # any other branch
+scripts/deploy-all.sh                    # back to main
+```
+
+Both services always come from the same branch, and each run re-installs
+dependencies and rebuilds from it, so switching back is just another run
+with the other branch name. The flag is passed to the individual scripts
+as `ASSISTANT_UI_BRANCH`, so they can be run standalone the same way:
+
+```bash
+ASSISTANT_UI_BRANCH=dev scripts/deploy-assistant-ui-frontend.sh
+```
+
+An unknown branch name fails fast, before anything is deployed. If the
+checkout at `ASSISTANT_UI_DIR` has uncommitted local edits, the switch is
+skipped with a warning rather than clobbering them.
+
 ## Individual scripts
 
 Run these on their own if you only need to install/update one piece.
@@ -241,9 +265,10 @@ sudo -u postgres psql -d assistant_ui -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm
 
 Each one:
 
-1. Clones the repo on first run; on later runs, fast-forward pulls latest
-   `main` (stops and warns instead of clobbering if the checkout has local
-   edits).
+1. Clones the repo on first run; on later runs, fast-forward pulls the
+   latest commit of the selected branch — `main` unless
+   `ASSISTANT_UI_BRANCH` says otherwise (stops and warns instead of
+   clobbering if the checkout has local edits).
 2. Installs/updates dependencies (shared venv, Poetry in-project venv, or
    pnpm, depending on the service).
 3. Creates a `.env` with sane non-secret defaults **only if one doesn't
@@ -297,6 +322,7 @@ the scripts:
 
 ```bash
 ASSISTANT_UI_DIR=/srv/ai-assistant-ui-fastapi \
+ASSISTANT_UI_BRANCH=dev \
 SERVICE_USER=deploy \
 scripts/deploy-all.sh
 ```

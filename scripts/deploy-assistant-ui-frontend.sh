@@ -24,6 +24,9 @@ export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 REPO_URL="${ASSISTANT_UI_REPO_URL:-https://github.com/alexvirt1/ai-assistant-ui-fastapi.git}"
 REPO_DIR="${ASSISTANT_UI_DIR:-/opt/ai-agent-lab/ai-assistant-ui-fastapi}"
+# Which branch to deploy. deploy-all.sh exports this from its --branch flag;
+# set it directly to run this script standalone against e.g. dev.
+BRANCH="${ASSISTANT_UI_BRANCH:-main}"
 FRONTEND_DIR="$REPO_DIR/frontend"
 SERVICE_NAME="assistant-ui-frontend"
 SERVICE_USER="${SERVICE_USER:-ubuntu}"
@@ -32,8 +35,8 @@ PORT="${ASSISTANT_UI_FRONTEND_PORT:-3000}"
 require_cmd git
 require_cmd corepack
 
-log "== assistant-ui-frontend: pull repo =="
-clone_or_update "$REPO_URL" "$REPO_DIR"
+log "== assistant-ui-frontend: pull repo (branch: $BRANCH) =="
+clone_or_update "$REPO_URL" "$REPO_DIR" "$BRANCH"
 
 log "== assistant-ui-frontend: install + build =="
 (cd "$FRONTEND_DIR" && corepack pnpm install && corepack pnpm build)
