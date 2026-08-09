@@ -87,6 +87,17 @@ DROPIN_DIR="/etc/systemd/system/${SERVICE_NAME}.service.d"
 DROPIN_FILE="$DROPIN_DIR/override.conf"
 if sudo test -f "$DROPIN_FILE"; then
   log "$DROPIN_FILE already exists, leaving it untouched"
+  # Drop-ins written before the %-escaping fix silently lose their
+  # DATABASE_URL (see systemd_escape_percent in lib.sh). We don't rewrite the
+  # file - it may have been hand-tuned - but an unescaped '%' means the
+  # backend is running without Postgres, so say so loudly.
+  EXISTING_URL="$(sudo sed -n 's/^Environment=DATABASE_URL=//p' "$DROPIN_FILE")"
+  # Strip the valid '%%' escapes first; any '%' still standing is the bad kind.
+  if [ -n "$EXISTING_URL" ] && [[ "${EXISTING_URL//%%/}" == *%* ]]; then
+    warn "$DROPIN_FILE contains an unescaped '%' in DATABASE_URL - systemd will discard that line and the backend will start WITHOUT Postgres."
+    warn "Fix it by doubling each '%' in that file, or delete it and re-run this script:"
+    warn "  sudo rm $DROPIN_FILE && $SCRIPT_DIR/deploy-assistant-ui-backend.sh"
+  fi
 else
   # install-postgres.sh already knew the password when it created the role, so
   # reuse what it recorded rather than prompting for the same secret twice.
@@ -106,7 +117,7 @@ else
     sudo install -m 0600 -o root -g root /dev/null "$DROPIN_FILE"
     sudo tee "$DROPIN_FILE" >/dev/null <<EOF
 [Service]
-Environment=DATABASE_URL=${ASSISTANT_UI_DATABASE_URL}
+Environment=DATABASE_URL=$(systemd_escape_percent "$ASSISTANT_UI_DATABASE_URL")
 EOF
   fi
 fi
@@ -118,6 +129,20 @@ sudo systemctl restart "$SERVICE_NAME"
 
 sleep 2
 sudo systemctl status "$SERVICE_NAME" --no-pager || true
+
+log "== assistant-ui-backend: verify DATABASE_URL reached the service =="
+# The health check below passes either way: the backend starts fine without
+# DATABASE_URL, it just runs with no Postgres persistence. So confirm systemd
+# actually kept the variable rather than discarding the line. grep -q, never
+# echo - the resolved value contains the DB password.
+if sudo test -f "$DROPIN_FILE"; then
+  if systemctl show -p Environment "$SERVICE_NAME" | grep -q 'DATABASE_URL='; then
+    log "OK: DATABASE_URL is present in the unit environment"
+  else
+    warn "DATABASE_URL is set in $DROPIN_FILE but did NOT reach the service - systemd discarded the line (usually an unescaped '%'; see journalctl for 'Failed to resolve specifiers')."
+    warn "The backend is running WITHOUT Postgres persistence. Inspect: sudo systemd-analyze verify /etc/systemd/system/${SERVICE_NAME}.service"
+  fi
+fi
 
 log "== assistant-ui-backend: health check =="
 if curl -fsS "http://127.0.0.1:8000/openapi.json" >/dev/null 2>&1; then

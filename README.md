@@ -300,7 +300,10 @@ Nothing in this repo or in `scripts/` contains real credentials.
   script). Re-running either script leaves an existing drop-in untouched.
 
   Passwords containing `@ : / ? # %` are percent-encoded automatically when
-  the URL is built, so no manual escaping is needed at the prompt.
+  the URL is built, so no manual escaping is needed at the prompt. The `%`
+  that encoding introduces is then doubled (`%23` → `%%23`) when the URL is
+  written into the systemd drop-in, because `%` starts a *specifier* in unit
+  files — see the "Invalid slot" entry under **Troubleshooting**.
 - Non-secret config (`OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_NUM_CTX`) is
   filled in with real homelab values since these aren't credentials.
 
@@ -396,6 +399,27 @@ journalctl -u <service-name> -f
 - **Backend starts but `/api/chat` 404s / no persistence** — `DATABASE_URL`
   drop-in is missing or wrong; check
   `systemctl cat assistant-ui-backend` and `journalctl -u assistant-ui-backend`.
+- **`Failed to resolve specifiers in DATABASE_URL=...: Invalid slot`** — the
+  drop-in has an unescaped `%`. In unit files `%` starts a specifier (`%i`,
+  `%n`, …), so a percent-encoded password (`#` → `%23`) makes systemd fail to
+  expand it and **discard the whole `Environment=` line**. The service still
+  starts and its health check still passes — it just runs with no Postgres
+  persistence, which is what makes this easy to miss. `deploy-assistant-ui-backend.sh`
+  now doubles each `%` when writing the drop-in, but it never rewrites an
+  existing one, so a drop-in created before this fix keeps the bad value
+  (the script warns about it on re-run). To repair a host:
+
+  ```bash
+  sudo rm /etc/systemd/system/assistant-ui-backend.service.d/override.conf
+  scripts/deploy-assistant-ui-backend.sh    # re-creates it, correctly escaped
+  ```
+
+  Confirm the variable actually reached the service (the deploy script now
+  checks this automatically too — note this prints the password):
+
+  ```bash
+  systemctl show -p Environment assistant-ui-backend
+  ```
 - **`password authentication failed for user "assistant_ui"`** — the drop-in's
   password doesn't match the role's. `install-postgres.sh` never resets an
   existing role's password, so this happens when the role was created outside

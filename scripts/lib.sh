@@ -144,6 +144,19 @@ urlencode() {
   printf '%s' "$out"
 }
 
+# systemd_escape_percent <string>
+# Doubles every '%' so systemd passes it through literally.
+#
+# In unit files '%' introduces a specifier (%i, %n, %H, ...). Our DATABASE_URL
+# is percent-encoded by urlencode(), so a password containing '#' becomes %23 -
+# which systemd tries to expand, fails on ("Failed to resolve specifiers ...:
+# Invalid slot"), and then it drops the ENTIRE Environment= line. The service
+# still starts, just with no DATABASE_URL, so the failure is silent until you
+# notice nothing is being persisted. '%%' is the documented literal escape.
+systemd_escape_percent() {
+  printf '%s' "${1//%/%%}"
+}
+
 # save_database_url <url>
 # Records the backend's DATABASE_URL for the next script/run to pick up.
 save_database_url() {
