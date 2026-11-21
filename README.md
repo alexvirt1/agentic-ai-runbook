@@ -313,6 +313,29 @@ Nothing in this repo or in `scripts/` contains real credentials.
   commented-out placeholders: fill in the ones you want by hand. An existing
   `.env` is never overwritten.
 
+## Image generation (optional, app 1.8.0+)
+
+The chat can generate images on ComfyUI on the GPU host. These scripts do not
+install ComfyUI or its models: that host has its own owner. To turn it on, add
+to `backend/.env` and restart the backend:
+
+```bash
+COMFYUI_BASE_URL=http://192.168.87.160:8188
+```
+
+The app offers a model only when ComfyUI has its files:
+
+| Model | Files in ComfyUI's `models/` |
+| --- | --- |
+| `z-image-turbo` (default) | `diffusion_models/z_image_turbo_int8_convrot.safetensors`, `text_encoders/qwen_3_4b_fp8_mixed.safetensors`, `vae/ae.safetensors` |
+| `flux2-klein` | `diffusion_models/flux-2-klein-4b.safetensors`, `text_encoders/qwen_3_4b_fp8_mixed.safetensors`, `vae/flux2-vae.safetensors` |
+
+The GPU is shared with Ollama: the app unloads the chat model while it
+generates and reloads it afterwards. Keep `OLLAMA_NUM_CTX` small enough for the
+chat model to fit the GPU on its own (24576 for `qwen3:8b` on 12 GB; check with
+`ollama ps` that it shows `100% GPU`). `deploy-all.sh` reports at the end
+whether image generation is on.
+
 ## Security
 
 This stack has no authentication layer — the frontend, backend API, and

@@ -57,23 +57,28 @@ log "== assistant-ui-backend: poetry install =="
 
 log "== assistant-ui-backend: ensure .env (non-secret config) =="
 # Seed a new .env from the app's own backend/.env.example, so the defaults
-# follow the app (e.g. OLLAMA_NUM_CTX went from 8192 to 32768 in 1.3.0, which
-# document answers need). Keys in it are commented-out placeholders only.
-# The inline block is a fallback for branches without the example file.
+# follow the app. Keys in it are commented-out placeholders only. The inline
+# block is a fallback for branches without the example file.
+#
+# OLLAMA_NUM_CTX has to suit the GPU, not just the app: 8192 cuts off document
+# search results (the app has wanted more since 1.3.0), while 32768 makes
+# qwen3:8b too big for a 12 GB GPU and Ollama runs most of it on the CPU -
+# every reply many times slower. 24576 fits (app 1.8.0's .env.example).
 if [ -f "$BACKEND_DIR/.env.example" ]; then
   ENV_DEFAULTS="$(cat "$BACKEND_DIR/.env.example")"
 else
   ENV_DEFAULTS="$(cat <<'EOF'
 OLLAMA_MODEL=qwen3:8b
 OLLAMA_BASE_URL=http://192.168.87.160:11434
-OLLAMA_NUM_CTX=32768
+OLLAMA_NUM_CTX=24576
 EOF
 )"
 fi
 ensure_env_file "$BACKEND_DIR/.env" "$ENV_DEFAULTS"
-if grep -qE '^OLLAMA_NUM_CTX=8192$' "$BACKEND_DIR/.env"; then
-  warn "$BACKEND_DIR/.env still sets OLLAMA_NUM_CTX=8192; the app has expected 32768 since 1.3.0 (document search results get cut off). Edit it by hand."
-fi
+case "$(grep -E '^OLLAMA_NUM_CTX=' "$BACKEND_DIR/.env" | tail -1 | cut -d= -f2)" in
+  8192)  warn "$BACKEND_DIR/.env sets OLLAMA_NUM_CTX=8192: document search results get cut off. 24576 suits a 12 GB GPU. Edit it by hand." ;;
+  32768) warn "$BACKEND_DIR/.env sets OLLAMA_NUM_CTX=32768: on a 12 GB GPU qwen3:8b then runs mostly on the CPU (check 'ollama ps'). 24576 fits. Edit it by hand." ;;
+esac
 
 log "== assistant-ui-backend: install systemd unit =="
 sudo tee "/etc/systemd/system/${SERVICE_NAME}.service" >/dev/null <<EOF

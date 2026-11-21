@@ -116,6 +116,14 @@ fi
 log "== final validation =="
 curl -fsS http://127.0.0.1:8000/openapi.json >/dev/null && echo "assistant-ui-backend :8000 OK" || warn "assistant-ui-backend :8000 not responding"
 curl -fsSI http://127.0.0.1:3000/ >/dev/null && echo "assistant-ui-frontend :3000 OK" || warn "assistant-ui-frontend :3000 not responding"
+# Image generation (app 1.8.0+) is optional: on only when COMFYUI_BASE_URL is set.
+if images="$(curl -fsS http://127.0.0.1:8000/api/images/models 2>/dev/null)"; then
+  case "$images" in
+    *'"configured":true'*'"name"'*) echo "image generation: on" ;;
+    *'"configured":true'*) warn "image generation: COMFYUI_BASE_URL is set but no image model is available (ComfyUI unreachable or models missing)" ;;
+    *) echo "image generation: off (set COMFYUI_BASE_URL in backend/.env to turn it on)" ;;
+  esac
+fi
 
 log "Done. Manual check: open http://<server-ip>:3000 and ask 'What time is it?' - confirm the current_time tool fires:"
 log "  journalctl -u assistant-ui-backend -n 50 --no-pager"
