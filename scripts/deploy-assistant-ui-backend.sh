@@ -60,10 +60,10 @@ log "== assistant-ui-backend: ensure .env (non-secret config) =="
 # follow the app. Keys in it are commented-out placeholders only. The inline
 # block is a fallback for branches without the example file.
 #
-# OLLAMA_NUM_CTX has to suit the GPU, not just the app: 8192 cuts off document
-# search results (the app has wanted more since 1.3.0), while 32768 makes
-# qwen3:8b too big for a 12 GB GPU and Ollama runs most of it on the CPU -
-# every reply many times slower. 24576 fits (app 1.8.0's .env.example).
+# OLLAMA_NUM_CTX: 8192 cuts off document search results (the app has wanted
+# more since 1.3.0). qwen3:8b needs about 6.7 GB at 24576 and 7.3 GB at 32768;
+# both fit a free 12 GB GPU, and 24576 (app 1.8.0's .env.example) leaves more
+# room next to ComfyUI on a shared GPU host.
 if [ -f "$BACKEND_DIR/.env.example" ]; then
   ENV_DEFAULTS="$(cat "$BACKEND_DIR/.env.example")"
 else
@@ -77,7 +77,6 @@ fi
 ensure_env_file "$BACKEND_DIR/.env" "$ENV_DEFAULTS"
 case "$(grep -E '^OLLAMA_NUM_CTX=' "$BACKEND_DIR/.env" | tail -1 | cut -d= -f2)" in
   8192)  warn "$BACKEND_DIR/.env sets OLLAMA_NUM_CTX=8192: document search results get cut off. 24576 suits a 12 GB GPU. Edit it by hand." ;;
-  32768) warn "$BACKEND_DIR/.env sets OLLAMA_NUM_CTX=32768: on a 12 GB GPU qwen3:8b then runs mostly on the CPU (check 'ollama ps'). 24576 fits. Edit it by hand." ;;
 esac
 
 log "== assistant-ui-backend: install systemd unit =="

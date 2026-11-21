@@ -332,8 +332,9 @@ The app offers a model only when ComfyUI has its files:
 
 The GPU is shared with Ollama: the app unloads the chat model while it
 generates and reloads it afterwards. Keep `OLLAMA_NUM_CTX` small enough for the
-chat model to fit the GPU on its own (24576 for `qwen3:8b` on 12 GB; check with
-`ollama ps` that it shows `100% GPU`). `deploy-all.sh` reports at the end
+chat model to fit the GPU on its own (`qwen3:8b`: about 6.7 GB at 24576, 7.3 GB
+at 32768; check with `ollama ps` that it shows `100% GPU`, since a model loaded
+while the GPU was busy stays partly on the CPU). `deploy-all.sh` reports at the end
 whether image generation is on.
 
 ## Security
