@@ -56,12 +56,24 @@ log "== assistant-ui-backend: poetry install =="
 (cd "$BACKEND_DIR" && poetry env use python3.12 && poetry install --no-root)
 
 log "== assistant-ui-backend: ensure .env (non-secret config) =="
-ensure_env_file "$BACKEND_DIR/.env" "$(cat <<'EOF'
+# Seed a new .env from the app's own backend/.env.example, so the defaults
+# follow the app (e.g. OLLAMA_NUM_CTX went from 8192 to 32768 in 1.3.0, which
+# document answers need). Keys in it are commented-out placeholders only.
+# The inline block is a fallback for branches without the example file.
+if [ -f "$BACKEND_DIR/.env.example" ]; then
+  ENV_DEFAULTS="$(cat "$BACKEND_DIR/.env.example")"
+else
+  ENV_DEFAULTS="$(cat <<'EOF'
 OLLAMA_MODEL=qwen3:8b
 OLLAMA_BASE_URL=http://192.168.87.160:11434
-OLLAMA_NUM_CTX=8192
+OLLAMA_NUM_CTX=32768
 EOF
 )"
+fi
+ensure_env_file "$BACKEND_DIR/.env" "$ENV_DEFAULTS"
+if grep -qE '^OLLAMA_NUM_CTX=8192$' "$BACKEND_DIR/.env"; then
+  warn "$BACKEND_DIR/.env still sets OLLAMA_NUM_CTX=8192; the app has expected 32768 since 1.3.0 (document search results get cut off). Edit it by hand."
+fi
 
 log "== assistant-ui-backend: install systemd unit =="
 sudo tee "/etc/systemd/system/${SERVICE_NAME}.service" >/dev/null <<EOF

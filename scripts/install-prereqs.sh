@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Installs the OS-level tooling every other script in this repo assumes is
 # already on the host: git/curl/build tooling, Python 3.12 + Poetry (for
-# assistant-ui-backend), and Node.js 20 + Corepack (for assistant-ui-frontend).
+# assistant-ui-backend), and Node.js 22 + Corepack (for assistant-ui-frontend).
 #
 # Meant to be the first thing run on a clean Ubuntu VM that has none of this
 # yet - deploy-all.sh runs it automatically. Idempotent: every step checks
@@ -14,7 +14,8 @@ source "$SCRIPT_DIR/lib.sh"
 require_non_root
 
 PYTHON_VERSION="${PYTHON_VERSION:-3.12}"
-NODE_MAJOR="${NODE_MAJOR:-20}"
+# Node 20 reached end of life in April 2026; Next.js 16 needs >= 20.9.
+NODE_MAJOR="${NODE_MAJOR:-22}"
 PY_BIN="python${PYTHON_VERSION}"
 
 require_cmd apt-get

@@ -48,7 +48,7 @@ installs all of it:
   don't carry it yet
 - [Poetry](https://python-poetry.org/), installed against `python3.12` — used
   for the assistant-ui backend
-- Node.js 20 with Corepack enabled — used for the frontend (pnpm via corepack)
+- Node.js 22 with Corepack enabled — used for the frontend (pnpm via corepack)
 
 It's idempotent (skips anything already installed) and safe to re-run.
 `deploy-all.sh` runs it automatically as the first step; set
@@ -90,7 +90,7 @@ cd /opt/ai-agent-lab/agentic-ai-runbook
 scripts/deploy-all.sh
 ```
 
-This installs OS-level prerequisites (Python 3.12 + Poetry, Node 20 +
+This installs OS-level prerequisites (Python 3.12 + Poetry, Node 22 +
 Corepack, build tools), installs/verifies Postgres, checks Ollama is
 reachable, then runs the two deploy scripts below in sequence, then curls
 both health endpoints.
@@ -124,7 +124,7 @@ skipped with a warning rather than clobbering them.
 Run these on their own if you only need to install/update one piece.
 
 ```bash
-scripts/install-prereqs.sh                # git/build tools, Python 3.12 + Poetry, Node 20 + Corepack
+scripts/install-prereqs.sh                # git/build tools, Python 3.12 + Poetry, Node 22 + Corepack
 scripts/install-ollama.sh                 # Ollama                        (:11434)
 scripts/install-postgres.sh               # PostgreSQL + role/db provisioning
 scripts/deploy-assistant-ui-backend.sh    # assistant-ui-backend.service   (:8000)
@@ -145,13 +145,13 @@ none of this yet:
    run against `python3.12` specifically, and adds its install dir
    (`~/.local/bin`) to `PATH` for this run and future login shells (via
    `/etc/profile.d/poetry-path.sh`).
-4. Installs Node.js 20 via the NodeSource setup script (skipped if a
-   Node 20+ is already present), then runs `corepack enable` so `pnpm` is
+4. Installs Node.js 22 via the NodeSource setup script (skipped if a
+   Node 22+ is already present), then runs `corepack enable` so `pnpm` is
    available through Corepack.
 
 `deploy-all.sh` runs this automatically; set `SKIP_PREREQS_INSTALL=1` to
 skip it. Override versions with `PYTHON_VERSION` (default `3.12`) or
-`NODE_MAJOR` (default `20`).
+`NODE_MAJOR` (default `22`; Node 20 reached end of life in April 2026).
 
 `deploy-assistant-ui-backend.sh` pins the backend's Poetry venv to this
 Python version explicitly (`poetry env use python3.12`), so it stays 3.12
@@ -180,9 +180,11 @@ repo):
    `OLLAMA_HOST` (default `0.0.0.0`, so other hosts on the LAN can reach
    it — set `OLLAMA_LISTEN_HOST=127.0.0.1` to keep it local-only).
 5. Enables, restarts, and health-checks the service.
-6. Prints the `ollama pull <model>` command for the model this stack
-   expects (`qwen3:8b` by default) instead of pulling it automatically —
-   set `PULL_MODEL=1` to have the script pull it for you.
+6. Prints the `ollama pull` commands for the models this stack expects
+   instead of pulling them automatically — the chat model (`OLLAMA_MODEL`,
+   default `qwen3:8b`) and the embedding model for document search
+   (`OLLAMA_EMBED_MODEL`, default `qwen3-embedding:0.6b`). Set
+   `PULL_MODEL=1` to have the script pull both for you.
 
 All values are overridable via env vars of the same name shown above (e.g.
 `OLLAMA_CONTEXT_LENGTH=16384 scripts/install-ollama.sh`).
@@ -305,7 +307,11 @@ Nothing in this repo or in `scripts/` contains real credentials.
   written into the systemd drop-in, because `%` starts a *specifier* in unit
   files — see the "Invalid slot" entry under **Troubleshooting**.
 - Non-secret config (`OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_NUM_CTX`) is
-  filled in with real homelab values since these aren't credentials.
+  filled in with real homelab values since these aren't credentials. A new
+  `backend/.env` is copied from the app's own `backend/.env.example`, whose
+  API keys (web search, OpenAI/Anthropic delegates, RapidAPI) are
+  commented-out placeholders: fill in the ones you want by hand. An existing
+  `.env` is never overwritten.
 
 ## Security
 

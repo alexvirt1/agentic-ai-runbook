@@ -23,6 +23,9 @@ OLLAMA_MAX_QUEUE="${OLLAMA_MAX_QUEUE:-32}"
 OLLAMA_FLASH_ATTENTION="${OLLAMA_FLASH_ATTENTION:-1}"
 OLLAMA_KV_CACHE_TYPE="${OLLAMA_KV_CACHE_TYPE:-q8_0}"
 OLLAMA_MODEL="${OLLAMA_MODEL:-qwen3:8b}"
+# Embedding model for document search (the "embed" role in the app's
+# backend/models.yaml), used for the vector half of document search.
+OLLAMA_EMBED_MODEL="${OLLAMA_EMBED_MODEL:-qwen3-embedding:0.6b}"
 PULL_MODEL="${PULL_MODEL:-0}"
 
 log "== install-ollama: binary =="
@@ -117,11 +120,13 @@ else
 fi
 
 if [ "$PULL_MODEL" = "1" ]; then
-  log "== install-ollama: pulling ${OLLAMA_MODEL} =="
+  log "== install-ollama: pulling ${OLLAMA_MODEL} and ${OLLAMA_EMBED_MODEL} =="
   ollama pull "$OLLAMA_MODEL"
+  ollama pull "$OLLAMA_EMBED_MODEL"
 else
-  log "Skipping model pull. Pull the model this stack expects with:"
+  log "Skipping model pull. Pull the models this stack expects with:"
   log "  ollama pull ${OLLAMA_MODEL}"
+  log "  ollama pull ${OLLAMA_EMBED_MODEL}"
   log "(or re-run with PULL_MODEL=1 to do it automatically)"
 fi
 
