@@ -125,5 +125,13 @@ if images="$(curl -fsS http://127.0.0.1:8000/api/images/models 2>/dev/null)"; th
   esac
 fi
 
+# Hybrid mode (app 1.9.0+) is optional: on only when ANTHROPIC_API_KEY is set.
+if cloud="$(curl -fsS http://127.0.0.1:8000/api/cloud 2>/dev/null)"; then
+  case "$cloud" in
+    *'"configured":true'*) echo "hybrid mode: on (the first Claude turn shows whether the key is accepted)" ;;
+    *) echo "hybrid mode: off (set ANTHROPIC_API_KEY in backend/.env to turn it on)" ;;
+  esac
+fi
+
 log "Done. Manual check: open http://<server-ip>:3000 and ask 'What time is it?' - confirm the current_time tool fires:"
 log "  journalctl -u assistant-ui-backend -n 50 --no-pager"

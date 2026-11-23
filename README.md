@@ -33,9 +33,9 @@ host, since the frontend proxies to the backend at `127.0.0.1:8000`.
 | Repo | Deploys to | systemd service | Port |
 | --- | --- | --- | --- |
 | [alexvirt1/ai-assistant-ui-fastapi](https://github.com/alexvirt1/ai-assistant-ui-fastapi/) `backend/` | `/opt/ai-agent-lab/
-ai-assistant-ui-fastapi/backend` | `assistant-ui-backend.service` | 8000 |
+ai-assistant-ui-fastapi/backend` | `assistant-ui-backend.service` | 8000 (loopback only, app 1.9.1+) |
 | same repo, `frontend/` | `/opt/ai-agent-lab/
-ai-assistant-ui-fastapi/frontend` | `assistant-ui-frontend.service` | 3000 |
+ai-assistant-ui-fastapi/frontend` | `assistant-ui-frontend.service` | 3000 (all interfaces) |
 
 ## Prerequisites
 
@@ -337,15 +337,63 @@ at 32768; check with `ollama ps` that it shows `100% GPU`, since a model loaded
 while the GPU was busy stays partly on the CPU). `deploy-all.sh` reports at the end
 whether image generation is on.
 
+## Hybrid mode (optional, app 1.9.0+)
+
+A chat can hand turns over to Claude Sonnet 5.5 (per chat: *Local only*, *Auto* - the local model
+proposes and you approve - or *Claude*). These scripts need nothing extra: `poetry install`
+already installs `langchain-anthropic`. To turn it on, add to `backend/.env` and restart the
+backend:
+
+```bash
+ANTHROPIC_API_KEY=<Console API key>   # starts sk-ant-api03; not a claude.ai login
+CLOUD_BUDGET_USD=10                  # optional monthly limit, default 10
+```
+
+- **The key** comes from console.anthropic.com and is billed per token, separately from any
+  claude.ai subscription. A Pro/Max subscription cannot be used by the app; Anthropic rejects
+  such a login with `401 invalid x-api-key`. The chat's *Open in Claude* button is the way to use
+  a subscription: it copies the conversation and opens claude.ai.
+- **Spend:** set a spend limit in the Console too. `CLOUD_BUDGET_USD` is the app's own limit;
+  over it, turns are answered locally with a note.
+- **If Claude fails** (bad key, rate limit, outage), app 1.9.2+ says why in the chat and the
+  local model answers the turn.
+
+`deploy-all.sh` reports at the end whether hybrid mode is on.
+
 ## Security
 
-This stack has no authentication layer — the frontend, backend API, and
-Ollama endpoint are all reachable by anyone who can route to their ports.
-This is intentional: the framework is designed for single-user use on a
-trusted home/lab network, not for multi-tenant or internet-facing
-deployment. If you expose any of these services beyond your trusted LAN
-(e.g. port-forwarding, a public reverse proxy, or a shared network), put
-your own authentication/authorization layer in front of them first.
+The app has **no login of its own**: every request is attributed to one fixed user
+(`SINGLE_USER_ID`), so anyone who can reach the frontend sees all chats, documents and images,
+and can spend the Claude budget. It is meant for one person on a trusted network.
+
+**What listens where:**
+
+| Port | Service | Reachable from |
+| --- | --- | --- |
+| 3000 | frontend (Next.js) | all interfaces: the browser, or a reverse proxy |
+| 8000 | backend | 127.0.0.1 only since app 1.9.1; only the frontend calls it (`BACKEND_HOST=0.0.0.0` only for a split setup) |
+| 5432 | PostgreSQL | localhost with the package default; check with `ss -ltn` that nothing set `listen_addresses` wider |
+| 11434 | Ollama (GPU host) | the LAN, so the app host can reach it |
+
+**Publishing the chat** (e.g. on a public hostname behind a reverse proxy):
+
+1. Put an authentication layer (e.g. an SSO proxy such as Authentik) in front of **every path**,
+   `/api/*` included, with no bypass rules. Don't pass identity headers on: the app does not use
+   them, and anything that can reach the app directly could forge them.
+2. Proxy only port 3000. The streaming chat needs:
+   - `proxy_buffering off`
+   - `gzip off` for the site, or the answer arrives all at once at the end
+   - `proxy_read_timeout 600s`: a turn can run for minutes, and the backend sends a heartbeat every 30 s
+   - `client_max_body_size 64m`: documents up to 32 MB, and PDF exports with diagrams
+3. Firewall the app host so that 3000 accepts only the proxy, and nothing else but SSH comes in.
+   Outbound must stay open:
+   - the GPU host (Ollama, ComfyUI)
+   - GitHub
+   - api.anthropic.com, for hybrid mode
+   - package registries
+4. Any other service on the host that listens on all interfaces (e.g. a prototype API) should be
+   bound to 127.0.0.1, for example with a systemd drop-in that overrides `ExecStart` with
+   `--host 127.0.0.1`.
 
 ## Overriding defaults
 
