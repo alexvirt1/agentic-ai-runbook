@@ -337,6 +337,31 @@ at 32768; check with `ollama ps` that it shows `100% GPU`, since a model loaded
 while the GPU was busy stays partly on the CPU). `deploy-all.sh` reports at the end
 whether image generation is on.
 
+Since app 1.9.4 the PNG comes back over ComfyUI's websocket (`/ws`, the same port), not
+through its temp folder, so nothing is left on the GPU host. A proxy or firewall in front of
+ComfyUI must let websocket upgrades through.
+
+### Reference photos (app 1.10.0+)
+
+Users can attach photos (PNG, JPEG, GIF or WebP, up to 20 MB each) with the paperclip, and the
+image is made to look like them. Nothing to configure beyond the above, but check:
+
+- **Model and nodes:** only `flux2-klein` takes references (its files in the table above). Its
+  ComfyUI also needs the built-in nodes `LoadImage`, `ImageScaleToTotalPixels`, `VAEEncode`,
+  `ReferenceLatent` and `SaveImageWebsocket`; without them Klein is not offered at all.
+- **Database:** the backend creates the `chat_references` table and the
+  `chat_images.reference_ids` column on start. Photos are deleted with their chat.
+- **Load on the GPU:** at most 4 photos and 2 MP in total per image. On a 12 GB card, 1 photo
+  added ~4 s and 2 added ~15 s; 4 photos at 0.5 MP each took ~30 s.
+- **Temp files on the GPU host:** each photo is uploaded to ComfyUI's temp folder just before its
+  job. ComfyUI empties that folder only when it restarts, and serves it to the LAN until then, so
+  give the GPU host a purge. On AI-1 it runs every 15 minutes and deletes files older than an
+  hour, set up by its owner. Never point the app at `input/`, which is never purged.
+- **Privacy:** on upload a photo is turned upright and its EXIF metadata, including the GPS
+  position, is removed. Claude (hybrid mode) sees photos only in a chat whose Docs box is
+  ticked; images are always generated on the GPU host.
+- **Behind a proxy:** `client_max_body_size 64m` (see Security) covers a 20 MB photo.
+
 ## Hybrid mode (optional, app 1.9.0+)
 
 A chat can hand turns over to Claude Sonnet 5.5 (per chat: *Local only*, *Auto* - the local model
@@ -363,7 +388,8 @@ CLOUD_BUDGET_USD=10                  # optional monthly limit, default 10
 ## Security
 
 The app has **no login of its own**: every request is attributed to one fixed user
-(`SINGLE_USER_ID`), so anyone who can reach the frontend sees all chats, documents and images,
+(`SINGLE_USER_ID`), so anyone who can reach the frontend sees all chats, documents, images and
+reference photos,
 and can spend the Claude budget. It is meant for one person on a trusted network.
 
 **What listens where:**
@@ -531,5 +557,18 @@ journalctl -u <service-name> -f
 - **Backends can't reach Ollama across the LAN** — confirm `OLLAMA_HOST` on
   the Ollama host is `0.0.0.0` (not `127.0.0.1`), and that its firewall
   allows the app host's IP on port `11434`.
+- **A photo arrives as a "document", or a new chat disappears from the list** — app 1.9.x
+  had no photo support: a phone's file picker ignores the type filter, so a photo went in as a
+  text file. Its NUL bytes made Postgres refuse the new chat (`PostgreSQL text fields cannot
+  contain NUL (0x00) bytes` in the backend log), which was then never listed. Upgrade to app
+  1.10.1+.
+- **Photos appear twice and the GPU runs out of memory** (`cudaMalloc failed: out of memory`
+  from Ollama) — app 1.10.0: a second tap on Send while photos were uploading sent them again
+  and started a second reply, which loaded the chat model while the first generated the image.
+  Upgrade to app 1.10.1+, which runs one reply per chat at a time.
+- **Images from photos fail with "Unknown or unavailable image model 'flux2-klein'"** — the
+  app offers Klein only when ComfyUI has its files and all of its nodes, the reference nodes
+  included. Check the Klein files and nodes under Reference photos above, and that ComfyUI
+  answers: `curl -s http://<gpu-host>:8188/object_info/ReferenceLatent | jq 'keys'`.
 - **Full historical context** for how this stack was built, debugged, and
   every dead end along the way: `chat-scripts.md` in this repo.
