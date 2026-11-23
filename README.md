@@ -346,6 +346,12 @@ ComfyUI must let websocket upgrades through.
 Users can attach photos (PNG, JPEG, GIF or WebP, up to 20 MB each) with the paperclip, and the
 image is made to look like them. Nothing to configure beyond the above, but check:
 
+- **Captions (app 1.11.0+):** the first time a photo is used, a vision model on the Ollama host
+  describes it in one sentence for the image prompt; without that, a second person in the photos
+  comes out generic. It must be pulled on the GPU host (`qwen3-vl:8b` by default, set with
+  `REFERENCE_CAPTION_MODEL` in `backend/.env`; empty turns captions off). It costs about 6 s to
+  load plus 3 s per photo, once per photo, while the chat model is unloaded anyway.
+
 - **Model and nodes:** only `flux2-klein` takes references (its files in the table above). Its
   ComfyUI also needs the built-in nodes `LoadImage`, `ImageScaleToTotalPixels`, `VAEEncode`,
   `ReferenceLatent` and `SaveImageWebsocket`; without them Klein is not offered at all.
@@ -570,5 +576,9 @@ journalctl -u <service-name> -f
   app offers Klein only when ComfyUI has its files and all of its nodes, the reference nodes
   included. Check the Klein files and nodes under Reference photos above, and that ComfyUI
   answers: `curl -s http://<gpu-host>:8188/object_info/ReferenceLatent | jq 'keys'`.
+- **A second person in the photos comes out generic** — app 1.10.x had no captions: upgrade to
+  1.11.0+ and check the vision model is on the GPU host (`ollama list | grep qwen3-vl`). A
+  backend log line `could not caption a reference photo` says why a caption failed; the image is
+  then made without it.
 - **Full historical context** for how this stack was built, debugged, and
   every dead end along the way: `chat-scripts.md` in this repo.
